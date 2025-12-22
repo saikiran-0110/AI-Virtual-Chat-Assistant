@@ -1,365 +1,300 @@
-class CommandInterpreter:
-    def __init__(self):
-        self.intent_aliases = {
-            "help": {"help", "h", "commands", "menu", "what can you do", "options"},
-            "exit": {"exit", "quit", "q", "bye", "close"},
-            "greet": {"hi", "hello", "hey", "good morning", "good afternoon", "good evening"},
-            "thanks": {"thanks", "thank you", "thx", "ty"},
-            "repeat": {"repeat", "say again"},
-            "status": {"status", "health", "ping"},
-            "calc": {"calc", "calculate", "compute", "math"},
-            "note_add": {"note", "add note", "remember"},
-            "note_list": {"notes", "list notes", "show notes"},
-            "note_clear": {"clear notes", "delete notes", "remove notes"},
+import json
+import os
+
+class PreferenceAssistant:
+    def __init__(self, prefs_file="user_profile.json"):
+        self._prefs_file = prefs_file
+        self._prefs = {
+            "name": "",
+            "age": "",
+            "city": "",
+            "language": "",
+            "tone": ""
         }
-        self._last_user_text = ""
-        self._notes = []
-        self._actions = self._build_actions()
+        self._load_prefs()
 
-    def _validate_result(self, result):
-        if not isinstance(result, dict):
-            return False
-        required_keys = ["intent", "confidence", "entities", "raw", "normalized"]
-        if not all(key in result for key in required_keys):
-            return False
-        if not isinstance(result["intent"], str):
-            return False
-        if not isinstance(result["confidence"], (int, float)) or not (0.0 <= result["confidence"] <= 1.0):
-            return False
-        if not isinstance(result["entities"], dict):
-            return False
-        return True
+    def _load_prefs(self):
+        if not os.path.exists(self._prefs_file):
+            return
+        try:
+            with open(self._prefs_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    for key in self._prefs:
+                        if key in data:
+                            self._prefs[key] = str(data[key]) if data[key] is not None else ""
+        except Exception:
+            pass
 
-    def _validate_action(self, action):
-        if not isinstance(action, dict):
-            return False
-        required_keys = ["aliases", "usage", "description"]
-        if not all(key in action for key in required_keys):
-            return False
-        if not isinstance(action["aliases"], (list, tuple)):
-            return False
-        if not isinstance(action["usage"], str):
-            return False
-        if not isinstance(action["description"], str):
-            return False
-        return True
+    def _save_prefs(self):
+        try:
+            with open(self._prefs_file, "w", encoding="utf-8") as f:
+                json.dump(self._prefs, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
 
-    def _build_actions(self):
-        actions = {
-            "help": {
-                "aliases": ["help", "h", "commands", "menu", "/help", "what can you do", "options"],
-                "usage": "help",
-                "description": "Show all available actions and how to use them.",
-            },
-            "exit": {
-                "aliases": ["exit", "quit", "q", "bye", "/exit", "/quit", "close"],
-                "usage": "exit",
-                "description": "Exit the assistant.",
-            },
-            "greet": {
-                "aliases": ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"],
-                "usage": "hello",
-                "description": "Greet the assistant.",
-            },
-            "thanks": {
-                "aliases": ["thanks", "thank you", "thx", "ty"],
-                "usage": "thanks",
-                "description": "Thank the assistant.",
-            },
-            "repeat": {
-                "aliases": ["repeat", "say again"],
-                "usage": "repeat",
-                "description": "Repeat the last user input.",
-            },
-            "status": {
-                "aliases": ["status", "ping", "health", "/status"],
-                "usage": "status",
-                "description": "Check if the assistant is running.",
-            },
-            "calc": {
-                "aliases": ["calc", "calculate", "compute", "math", "/calc"],
-                "usage": "calc <expression>",
-                "description": "Calculate a mathematical expression. Example: calc 2+2",
-            },
-            "note_add": {
-                "aliases": ["note", "add note", "remember"],
-                "usage": "remember <text>",
-                "description": "Save a note. Example: remember buy milk",
-            },
-            "note_list": {
-                "aliases": ["notes", "list notes", "show notes"],
-                "usage": "notes",
-                "description": "List all saved notes.",
-            },
-            "note_clear": {
-                "aliases": ["clear notes", "delete notes", "remove notes"],
-                "usage": "clear notes",
-                "description": "Clear all saved notes.",
-            },
-        }
-        validated_actions = {}
-        for key, action in actions.items():
-            if self._validate_action(action):
-                validated_actions[key] = action
-        return validated_actions
-
-    def _result(self, intent, confidence, entities, raw, normalized):
-        result = {
-            "intent": str(intent) if intent else "",
-            "confidence": float(confidence) if isinstance(confidence, (int, float)) else 0.0,
-            "entities": dict(entities) if isinstance(entities, dict) else {},
-            "raw": str(raw) if raw is not None else "",
-            "normalized": str(normalized) if normalized is not None else ""
-        }
-        if not self._validate_result(result):
-            return {
-                "intent": "error",
-                "confidence": 0.0,
-                "entities": {},
-                "raw": str(raw) if raw is not None else "",
-                "normalized": str(normalized) if normalized is not None else ""
-            }
-        return result
-
-    def interpret(self, user_text):
-        raw = user_text if user_text is not None else ""
-        text = self._normalize(raw)
-        self._last_user_text = raw
-
-        if not text:
-            return self._result("empty", 1.0, {}, raw, text)
-
-        if text.startswith("/"):
-            return self._interpret_slash_command(raw, text)
-
-        alias_match = self._match_alias(text)
-        if alias_match:
-            return self._result(alias_match, 0.95, {}, raw, text)
-
-        if self._contains_any(text, ["how do i", "how to", "what can you do", "what are you", "help me"]):
-            return self._result("help", 0.85, {}, raw, text)
-
-        if self._contains_any(text, ["i am leaving", "goodbye", "see you", "stop"]):
-            return self._result("exit", 0.8, {}, raw, text)
-
-        note_intent = self._interpret_notes(text, raw)
-        if note_intent is not None:
-            return note_intent
-
-        calc_intent = self._interpret_calc(text, raw)
-        if calc_intent is not None:
-            return calc_intent
-
-        return self._result("chat", 0.6, {"message": raw.strip()}, raw, text)
-
-    def handle(self, user_text):
-        parsed = self.interpret(user_text)
-        if not self._validate_result(parsed):
-            return "Error processing command."
-        
-        intent = parsed["intent"]
-        entities = parsed["entities"]
-
-        if intent == "empty":
-            return "Please type a command or message."
-        if intent == "help":
-            return self._help_text()
-        if intent == "exit":
-            return "Exiting. Bye!"
-        if intent == "greet":
-            return "Hello! Type 'help' to see commands."
-        if intent == "thanks":
-            return "You are welcome."
-        if intent == "repeat":
-            return "You last said: " + (self._last_user_text or "")
-        if intent == "status":
-            return "OK"
-        if intent == "note_add":
-            note = entities.get("text", "").strip() if isinstance(entities, dict) else ""
-            if not note:
-                return "Please provide the note text. Example: remember buy milk"
-            if isinstance(self._notes, list):
-                self._notes.append(note)
-            return "Saved note."
-        if intent == "note_list":
-            if not isinstance(self._notes, list) or not self._notes:
-                return "No notes saved."
-            out = ["Notes:"]
-            for i, n in enumerate(self._notes, 1):
-                out.append(str(i) + ". " + str(n))
-            return "\n".join(out)
-        if intent == "note_clear":
-            self._notes = []
-            return "All notes cleared."
-        if intent == "calc":
-            expr = entities.get("expression", "").strip() if isinstance(entities, dict) else ""
-            ok, value_or_error = self._safe_eval_arithmetic(expr)
-            return str(value_or_error) if ok else ("Calculation error: " + str(value_or_error))
-
-        message = entities.get("message", "") if isinstance(entities, dict) else ""
-        return "I understood this as chat: " + str(message)
-
-    def _normalize(self, s):
-        s = (s or "").strip().lower()
+    def _clean_spaces(self, s):
+        s = (s or "").strip()
         while "  " in s:
             s = s.replace("  ", " ")
         return s
 
-    def _contains_any(self, text, phrases):
-        if not isinstance(text, str) or not isinstance(phrases, (list, tuple)):
+    def _normalize_key(self, key):
+        k = (key or "").strip().lower()
+        while "  " in k:
+            k = k.replace("  ", " ")
+        out = []
+        for ch in k:
+            ok = ("a" <= ch <= "z") or ("0" <= ch <= "9") or ch in ["_", "-", " "]
+            if ok:
+                out.append(ch)
+        k = "".join(out).strip()
+        while "  " in k:
+            k = k.replace("  ", " ")
+        return k
+
+    def _parse_set(self, text):
+        if not text.lower().startswith("set "):
+            return "", ""
+        rest = text[4:].strip()
+        eq = rest.find("=")
+        if eq == -1:
+            return "", ""
+        left = rest[:eq].strip()
+        right = rest[eq + 1:].strip()
+        key = self._normalize_key(left)
+        value = right
+        if not key or not value:
+            return "", ""
+        return key, value
+
+    def _parse_key_value(self, s, cmd_word):
+        lower = s.lower()
+        prefix = cmd_word.lower() + " "
+        if not lower.startswith(prefix):
+            return "", ""
+        rest = s[len(prefix):].strip()
+        eq = rest.find("=")
+        if eq == -1:
+            return "", ""
+        left = rest[:eq].strip()
+        right = rest[eq + 1:].strip()
+        key = self._normalize_key(left)
+        value = right
+        if not key or not value:
+            return "", ""
+        return key, value
+
+    def _parse_rename(self, s):
+        lower = s.lower()
+        if not lower.startswith("rename "):
+            return "", ""
+        rest = s[7:].strip()
+        arrow = rest.find("->")
+        if arrow == -1:
+            return "", ""
+        old_key = self._normalize_key(rest[:arrow].strip())
+        new_key = self._normalize_key(rest[arrow + 2:].strip())
+        if not old_key or not new_key:
+            return "", ""
+        return old_key, new_key
+
+    def _is_digits(self, s):
+        s = (s or "").strip()
+        if not s:
             return False
-        for p in phrases:
-            if isinstance(p, str) and p in text:
-                return True
-        return False
-
-    def _match_alias(self, text):
-        if not isinstance(text, str) or not isinstance(self.intent_aliases, dict):
-            return None
-        for intent, aliases in self.intent_aliases.items():
-            if not isinstance(aliases, (set, list, tuple)):
-                continue
-            for a in aliases:
-                if isinstance(a, str) and text == a:
-                    return intent
-        for intent, aliases in self.intent_aliases.items():
-            if not isinstance(aliases, (set, list, tuple)):
-                continue
-            for a in aliases:
-                if isinstance(a, str) and len(a) >= 5 and a in text:
-                    return intent
-        return None
-
-    def _interpret_slash_command(self, raw, text):
-        parts = text[1:].split(" ", 1)
-        cmd = parts[0].strip()
-        arg = parts[1].strip() if len(parts) > 1 else ""
-
-        if cmd in ("h", "help", "commands"):
-            return self._result("help", 1.0, {}, raw, text)
-        if cmd in ("q", "quit", "exit"):
-            return self._result("exit", 1.0, {}, raw, text)
-        if cmd in ("calc", "calculate", "math"):
-            if not arg:
-                return self._result("calc", 0.9, {"expression": ""}, raw, text)
-            return self._result("calc", 0.95, {"expression": arg}, raw, text)
-
-        return self._result("chat", 0.6, {"command": cmd, "arg": arg}, raw, text)
-
-    def _interpret_notes(self, text, raw):
-        if not isinstance(text, str) or not isinstance(raw, str):
-            return None
-        if text.startswith("remember "):
-            return self._result("note_add", 0.95, {"text": raw.strip()[len("remember "):]}, raw, text)
-        if text.startswith("add note "):
-            return self._result("note_add", 0.95, {"text": raw.strip()[len("add note "):]}, raw, text)
-        if text.startswith("note "):
-            return self._result("note_add", 0.9, {"text": raw.strip()[len("note "):]}, raw, text)
-
-        if text in ("notes", "list notes", "show notes"):
-            return self._result("note_list", 0.95, {}, raw, text)
-        if text in ("clear notes", "delete notes", "remove notes"):
-            return self._result("note_clear", 0.95, {}, raw, text)
-
-        return None
-
-    def _interpret_calc(self, text, raw):
-        if not isinstance(text, str) or not isinstance(raw, str):
-            return None
-        if text.startswith("calculate "):
-            expr = raw.strip()[len("calculate "):].strip()
-            return self._result("calc", 0.9, {"expression": expr}, raw, text)
-
-        if text.startswith("calc "):
-            expr = raw.strip()[len("calc "):].strip()
-            return self._result("calc", 0.9, {"expression": expr}, raw, text)
-
-        if text.startswith("what is "):
-            expr = raw.strip()[len("what is "):].strip()
-            return self._result("calc", 0.85, {"expression": expr}, raw, text)
-
-        if self._looks_like_arithmetic(text):
-            return self._result("calc", 0.8, {"expression": raw.strip()}, raw, text)
-
-        return None
-
-    def _looks_like_arithmetic(self, text):
-        if not isinstance(text, str):
-            return False
-        allowed = "0123456789.+-*/() %"
-        if not text:
-            return False
-        has_digit = False
-        has_op = False
-        for ch in text:
-            if ch not in allowed:
+        for ch in s:
+            if ch < "0" or ch > "9":
                 return False
-            if ch.isdigit():
-                has_digit = True
-            if ch in "+-*/%":
-                has_op = True
-        return has_digit and has_op
+        return True
 
-    def _safe_eval_arithmetic(self, expr):
-        expr = (expr or "").strip()
-        if not isinstance(expr, str) or not expr:
-            return False, "No expression provided."
+    def handle(self, user_input):
+        raw = self._clean_spaces(user_input)
+        if not raw:
+            return "Type 'help' to see commands."
 
-        allowed = "0123456789.+-*/()% "
-        for ch in expr:
-            if ch not in allowed:
-                return False, "Unsupported character: " + ch
+        lower = raw.lower()
 
-        if "_" in expr:
-            return False, "Invalid expression."
+        if lower in ("help", "h", "?"):
+            return (
+                "Commands:\n"
+                "- set <key> = <value>\n"
+                "- get <key>\n"
+                "- prefs\n"
+                "- clear <key>\n"
+                "- clear all\n"
+                "- say <message>\n"
+                "- add <key> = <value>\n"
+                "- update <key> = <value>\n"
+                "- rename <old> -> <new>\n"
+                "- show <key>\n"
+                "- list\n"
+                "- remove <key>\n"
+                "Examples:\n"
+                "  set name = Ahmed\n"
+                "  update name = Ahmed Akram\n"
+                "  rename phone -> mobile\n"
+                "  show name"
+            )
 
-        try:
-            value = eval(expr, {"__builtins__": None}, {})
-            return True, value
-        except Exception as e:
-            return False, str(e)
+        if lower.startswith("set "):
+            key, value = self._parse_set(raw)
+            if not key:
+                return "Usage: set <key> = <value>"
+            if key not in self._prefs:
+                return "Unknown preference field: " + key + ". Type 'help' to see allowed fields."
+            if key == "age":
+                if not self._is_digits(value):
+                    return "Invalid age. Please enter digits only. Example: set age = 23"
+            self._prefs[key] = value
+            self._save_prefs()
+            return "Saved: " + key + " = " + value
 
-    def _help_text(self):
-        if not isinstance(self._actions, dict):
-            return "Help information unavailable."
-        lines = []
-        lines.append("Available actions:")
-        lines.append("")
-        keys = list(self._actions.keys())
-        keys.sort()
+        if lower.startswith("get "):
+            key = self._normalize_key(raw[4:])
+            if not key:
+                return "Usage: get <key>"
+            if key not in self._prefs:
+                return "No preference found for: " + key
+            return key + " = " + self._prefs[key]
 
-        for name in keys:
-            info = self._actions.get(name)
-            if not isinstance(info, dict):
-                continue
-            aliases = info.get("aliases", [])
-            usage = info.get("usage", "")
-            description = info.get("description", "")
-            if isinstance(aliases, (list, tuple)):
-                alias_str = ", ".join(str(a) for a in aliases)
+        if lower == "prefs":
+            if not any(self._prefs.values()):
+                return "No preferences saved."
+            keys = list(self._prefs.keys())
+            keys.sort()
+            lines = ["Preferences:"]
+            for k in keys:
+                if self._prefs[k]:
+                    lines.append("- " + k + " = " + self._prefs[k])
+            return "\n".join(lines) if len(lines) > 1 else "No preferences saved."
+
+        if lower == "clear all":
+            for key in self._prefs:
+                self._prefs[key] = ""
+            self._save_prefs()
+            return "All preferences cleared."
+
+        if lower.startswith("clear "):
+            key = self._normalize_key(raw[6:])
+            if not key:
+                return "Usage: clear <key> OR clear all"
+            if key not in self._prefs:
+                return "No preference found for: " + key
+            self._prefs[key] = ""
+            self._save_prefs()
+            return "Removed preference: " + key
+
+        if lower.startswith("say "):
+            msg = raw[4:].strip()
+            if not msg:
+                return "Usage: say <message>"
+
+            name = (self._prefs.get("name", "") or "").strip()
+            tone = (self._prefs.get("tone", "") or "").strip().lower()
+            language = (self._prefs.get("language", "") or "").strip()
+
+            prefix = ""
+            if name:
+                prefix = name + ": "
+
+            if tone == "formal":
+                base = "Received. " + prefix + msg
             else:
-                alias_str = ""
-            lines.append("- " + str(usage))
-            lines.append("  " + str(description))
-            lines.append("  Aliases: " + alias_str)
-            lines.append("")
+                base = "Got it. " + prefix + msg
 
-        lines.append("Examples:")
-        lines.append("  help")
-        lines.append("  calc 2+2")
-        lines.append("  remember buy milk")
-        lines.append("  notes")
-        lines.append("  exit")
-        return "\n".join(lines).rstrip()
+            if language:
+                base = base + " (Preferred language: " + language + ")"
+
+            return base
+
+        if lower.startswith("add "):
+            key, value = self._parse_key_value(raw, "add")
+            if not key:
+                return "Usage: add <key> = <value>"
+            if key not in self._prefs:
+                return "Unknown preference field: " + key + ". Type 'help' to see allowed fields."
+            if self._prefs[key]:
+                return "Preference already exists. Use: update " + key + " = <value>"
+            if key == "age":
+                if not self._is_digits(value):
+                    return "Invalid age. Please enter digits only. Example: add age = 23"
+            self._prefs[key] = value
+            self._save_prefs()
+            return "Added: " + key + " = " + value
+
+        if lower.startswith("update "):
+            key, value = self._parse_key_value(raw, "update")
+            if not key:
+                return "Usage: update <key> = <value>"
+            if key not in self._prefs:
+                return "Preference not found. Use: add " + key + " = <value>"
+            if not self._prefs[key]:
+                return "Preference not found. Use: add " + key + " = <value>"
+            if key == "age":
+                if not self._is_digits(value):
+                    return "Invalid age. Please enter digits only. Example: update age = 23"
+            old = self._prefs[key]
+            self._prefs[key] = value
+            self._save_prefs()
+            return "Updated: " + key + " = " + value + " (previous: " + old + ")"
+
+        if lower.startswith("rename "):
+            old_key, new_key = self._parse_rename(raw)
+            if not old_key:
+                return "Usage: rename <old> -> <new>"
+            if old_key not in self._prefs:
+                return "Preference not found: " + old_key
+            if new_key not in self._prefs:
+                return "Unknown preference field: " + new_key + ". Type 'help' to see allowed fields."
+            if self._prefs[new_key]:
+                return "Cannot rename. Target key already has a value: " + new_key
+            self._prefs[new_key] = self._prefs[old_key]
+            self._prefs[old_key] = ""
+            self._save_prefs()
+            return "Renamed: " + old_key + " -> " + new_key
+
+        if lower.startswith("show "):
+            key = self._normalize_key(raw[5:])
+            if not key:
+                return "Usage: show <key>"
+            if key not in self._prefs:
+                return "Preference not found: " + key
+            if not self._prefs[key]:
+                return "Preference not found: " + key
+            return key + " = " + self._prefs[key]
+
+        if lower == "list":
+            if not any(self._prefs.values()):
+                return "No preferences saved."
+            keys = list(self._prefs.keys())
+            keys.sort()
+            lines = ["Preferences:"]
+            for k in keys:
+                if self._prefs[k]:
+                    lines.append("- " + k + " = " + self._prefs[k])
+            return "\n".join(lines) if len(lines) > 1 else "No preferences saved."
+
+        if lower.startswith("remove "):
+            key = self._normalize_key(raw[7:])
+            if not key:
+                return "Usage: remove <key>"
+            if key not in self._prefs:
+                return "Preference not found: " + key
+            self._prefs[key] = ""
+            self._save_prefs()
+            return "Removed: " + key
+
+        return "Unknown command. Type 'help' to see commands."
 
 
 if __name__ == "__main__":
-    assistant = CommandInterpreter()
-    print("Assistant ready. Type 'help' to see available actions.")
+    app = PreferenceAssistant(prefs_file="user_profile.json")
+    print("Preference Editor ready. Type 'help' for commands. Type 'exit' to quit.")
     while True:
         user = input("> ")
-        response = assistant.handle(user)
-        print(response)
-        parsed = assistant.interpret(user)
-        if isinstance(parsed, dict) and parsed.get("intent") == "exit":
+        if user.strip().lower() in ("exit", "quit"):
+            print("Bye!")
             break
+        print(app.handle(user))
+
