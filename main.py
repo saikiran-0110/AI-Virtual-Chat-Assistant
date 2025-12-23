@@ -1,31 +1,17 @@
-import json
-import os
-
-class NoteAssistant:
+class InfoSnippetAssistant:
     def __init__(self):
-        self._notes = []
-        self._next_id = 1
-        self._json_file = "notes.json"
-        self._load_notes()
-
-    def _load_notes(self):
-        if os.path.exists(self._json_file):
-            try:
-                with open(self._json_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        self._notes = data
-                        if self._notes:
-                            self._next_id = max(n.get("id", 0) for n in self._notes) + 1
-            except (json.JSONDecodeError, IOError):
-                self._notes = []
-
-    def _save_notes(self):
-        try:
-            with open(self._json_file, "w", encoding="utf-8") as f:
-                json.dump(self._notes, f, indent=2, ensure_ascii=False)
-        except IOError:
-            pass
+        self._snippets = {
+            "about": "This assistant helps with notes, reminders, calculations, and quick information.",
+            "help": "Use simple commands like info <topic>, topics, or help.",
+            "privacy": "All data is stored locally on your system and is not shared.",
+            "notes": "Notes allow you to save, edit, search, and retrieve written information.",
+            "reminders": "Reminders help you remember tasks by notifying you at the right time.",
+            "calculations": "The calculator can solve small arithmetic problems quickly.",
+            "definitions": "Definitions help explain unfamiliar words or technical terms.",
+            "storage": "Information is saved in structured files so it is not lost across sessions.",
+            "usage": "Type help to see available commands and examples.",
+            "exit": "Type exit or quit to close the assistant."
+        }
 
     def _clean(self, text):
         text = (text or "").strip()
@@ -33,215 +19,75 @@ class NoteAssistant:
             text = text.replace("  ", " ")
         return text
 
-    def _is_number(self, text):
-        text = (text or "").strip()
-        if not text:
-            return False
-        for ch in text:
-            if ch < "0" or ch > "9":
-                return False
-        return True
-
-    def _to_lower(self, text):
+    def _lower(self, text):
         return (text or "").strip().lower()
-
-    def _split_tags(self, tags_text):
-        raw = (tags_text or "").strip()
-        if not raw:
-            return []
-        parts = raw.split(",")
-        out = []
-        for p in parts:
-            t = self._to_lower(p)
-            t = self._clean(t)
-            if t:
-                out.append(t)
-        unique = []
-        for t in out:
-            if t not in unique:
-                unique.append(t)
-        return unique
-
-    def _validate_note(self, title, content):
-        if not title or not title.strip():
-            return False, "Title cannot be empty."
-        if not content or not content.strip():
-            return False, "Content cannot be empty."
-        return True, None
-
-    def _matches_keywords(self, note, keywords):
-        hay = self._to_lower(note["title"] + " " + note["content"])
-        for k in keywords:
-            if k not in hay:
-                return False
-        return True
 
     def handle(self, user_input):
         raw = self._clean(user_input)
-        low = raw.lower()
+        low = self._lower(raw)
 
         if not raw:
-            return "Type 'help' to see commands."
+            return "Type 'help' to see available commands."
 
         if low in ("help", "h", "?"):
             return (
                 "Commands:\n"
-                "- new <title> | <content> | <tag1,tag2,...>\n"
-                "- list\n"
-                "- get <id>\n"
-                "- delete <id>\n"
-                "- search keyword <words>\n"
-                "- search tag <tagname>\n"
+                "- info <topic>\n"
+                "- topics\n"
                 "Examples:\n"
-                "  new shopping | buy milk and bread\n"
-                "  new groceries | buy eggs | personal,shopping\n"
-                "  search keyword milk eggs\n"
-                "  search tag shopping"
+                "  info privacy\n"
+                "  info reminders\n"
+                "  topics"
             )
 
-        if low.startswith("new "):
-            return self._new_note(raw[4:])
+        if low == "topics":
+            return self._list_topics()
 
-        if low == "list":
-            return self._list_notes()
+        if low.startswith("info "):
+            return self._get_info(raw[5:])
 
-        if low.startswith("get "):
-            return self._get_note(raw[4:])
+        return (
+            "I am not sure how to answer that.\n"
+            "Try: topics (to see available information)\n"
+            "Or type: help"
+        )
 
-        if low.startswith("delete "):
-            return self._delete_note(raw[7:])
-
-        if low.startswith("search keyword "):
-            return self._search_keyword(raw[len("search keyword "):])
-
-        if low.startswith("search tag "):
-            return self._search_tag(raw[len("search tag "):])
-
-        return "Unknown command. Type 'help' to see commands."
-
-    def _new_note(self, rest):
-        rest = rest.strip()
-        parts = rest.split("|")
-        if len(parts) < 2:
-            return "Usage: new <title> | <content> | <tag1,tag2,...>"
-
-        title = parts[0].strip()
-        content = parts[1].strip()
-        tags_text = ""
-        if len(parts) >= 3:
-            tags_text = parts[2].strip()
-
-        valid, error = self._validate_note(title, content)
-        if not valid:
-            return error
-
-        tags = self._split_tags(tags_text)
-
-        note = {
-            "id": self._next_id,
-            "title": title,
-            "content": content,
-            "tags": tags
-        }
-        self._notes.append(note)
-        self._next_id += 1
-        self._save_notes()
-
-        return "Note created. ID=" + str(note["id"])
-
-    def _list_notes(self):
-        if not self._notes:
-            return "No notes found."
-        lines = ["Notes:"]
-        for n in self._notes:
-            tags = n.get("tags", [])
-            tag_part = "tags: " + (", ".join(tags) if tags else "none")
-            lines.append("ID=" + str(n["id"]) + " | " + n["title"] + " | " + tag_part)
+    def _list_topics(self):
+        keys = list(self._snippets.keys())
+        keys.sort()
+        lines = ["Available topics:"]
+        for k in keys:
+            lines.append("- " + k)
         return "\n".join(lines)
 
-    def _get_note(self, id_text):
-        id_text = id_text.strip()
-        if not self._is_number(id_text):
-            return "Usage: get <id>"
+    def _get_info(self, topic_text):
+        topic = self._lower(topic_text)
+        if not topic:
+            return "Usage: info <topic>"
 
-        note_id = int(id_text)
-        for n in self._notes:
-            if n["id"] == note_id:
-                tags = n.get("tags", [])
-                tags_str = ", ".join(tags) if tags else "none"
-                return (
-                    "ID=" + str(n["id"]) + "\n"
-                    "Title: " + n["title"] + "\n"
-                    "Tags: " + tags_str + "\n"
-                    "Content: " + n["content"]
-                )
-        return "Note not found: " + str(note_id)
+        if topic in self._snippets:
+            return topic + ": " + self._snippets[topic]
 
-    def _delete_note(self, id_text):
-        id_text = id_text.strip()
-        if not self._is_number(id_text):
-            return "Usage: delete <id>"
+        suggestions = []
+        for k in self._snippets:
+            if topic in k or k in topic:
+                suggestions.append(k)
 
-        note_id = int(id_text)
-        for i in range(len(self._notes)):
-            if self._notes[i]["id"] == note_id:
-                removed_title = self._notes[i]["title"]
-                del self._notes[i]
-                self._save_notes()
-                return "Deleted note ID=" + str(note_id) + " (" + removed_title + ")"
-        return "No note found with ID=" + str(note_id)
+        if suggestions:
+            return (
+                "No exact information found for '" + topic + "'.\n"
+                "Did you mean:\n- " + "\n- ".join(suggestions)
+            )
 
-    def _search_keyword(self, words):
-        text = self._clean(words)
-        if not text:
-            return "Usage: search keyword <words>"
-
-        keywords = self._clean(self._to_lower(text)).split(" ")
-        filtered = []
-        for k in keywords:
-            k = k.strip()
-            if k:
-                filtered.append(k)
-
-        if not filtered:
-            return "Usage: search keyword <words>"
-
-        matches = []
-        for n in self._notes:
-            if self._matches_keywords(n, filtered):
-                matches.append(n)
-
-        if not matches:
-            return "No notes found for keywords: " + " ".join(filtered)
-
-        lines = ["Matches (" + str(len(matches)) + "):"]
-        for n in matches:
-            lines.append("ID=" + str(n["id"]) + " | " + n["title"])
-        return "\n".join(lines)
-
-    def _search_tag(self, tag_text):
-        tag = self._clean(self._to_lower(tag_text))
-        if not tag:
-            return "Usage: search tag <tagname>"
-
-        matches = []
-        for n in self._notes:
-            tags = n.get("tags", [])
-            if tag in tags:
-                matches.append(n)
-
-        if not matches:
-            return "No notes found for tag: " + tag
-
-        lines = ["Matches (" + str(len(matches)) + ") for tag '" + tag + "':"]
-        for n in matches:
-            lines.append("ID=" + str(n["id"]) + " | " + n["title"])
-        return "\n".join(lines)
+        return (
+            "No information found for '" + topic + "'.\n"
+            "Type 'topics' to see available information."
+        )
 
 
 if __name__ == "__main__":
-    app = NoteAssistant()
-    print("Note Assistant ready. Type 'help' for commands. Type 'exit' to quit.")
+    app = InfoSnippetAssistant()
+    print("Info Assistant ready. Type 'help' for commands. Type 'exit' to quit.")
     while True:
         user = input("> ")
         if user.strip().lower() in ("exit", "quit"):
