@@ -1,372 +1,287 @@
-class Assistant:
+import json
+import os
+
+class NoteAssistant:
     def __init__(self):
-        self._actions = self._build_actions()
-        self._history = []
+        self._notes = []
+        self._next_id = 1
+        self._json_file = "notes.json"
+        self._load_notes()
 
-    def _validate_action(self, action):
-        if not isinstance(action, dict):
-            return False
-        required_keys = ["aliases", "usage", "description", "handler"]
-        if not all(key in action for key in required_keys):
-            return False
-        if not isinstance(action["aliases"], (list, tuple)):
-            return False
-        if not isinstance(action["usage"], str):
-            return False
-        if not isinstance(action["description"], str):
-            return False
-        if not callable(action["handler"]):
-            return False
-        return True
+    def _load_notes(self):
+        if os.path.exists(self._json_file):
+            try:
+                with open(self._json_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        self._notes = data
+                        if self._notes:
+                            self._next_id = max(n.get("id", 0) for n in self._notes) + 1
+            except (json.JSONDecodeError, IOError):
+                self._notes = []
 
-    def _validate_history_entry(self, entry):
-        if not isinstance(entry, dict):
-            return False
-        if "input" not in entry or "output" not in entry:
-            return False
-        if not isinstance(entry["input"], str):
-            return False
-        if not isinstance(entry["output"], str):
-            return False
-        return True
+    def _save_notes(self):
+        try:
+            with open(self._json_file, "w", encoding="utf-8") as f:
+                json.dump(self._notes, f, indent=2, ensure_ascii=False)
+        except IOError:
+            pass
 
-    def _build_actions(self):
-        actions = {
-            "help": {
-                "aliases": ["help", "h", "commands", "menu", "/help"],
-                "usage": "help",
-                "description": "Show all available actions and how to use them.",
-                "handler": self._cmd_help
-            },
-            "exit": {
-                "aliases": ["exit", "quit", "q", "bye", "/exit", "/quit"],
-                "usage": "exit",
-                "description": "Exit the assistant.",
-                "handler": self._cmd_exit
-            },
-            "status": {
-                "aliases": ["status", "ping", "health", "/status"],
-                "usage": "status",
-                "description": "Check if the assistant is running.",
-                "handler": self._cmd_status
-            },
-            "echo": {
-                "aliases": ["echo", "/echo"],
-                "usage": "echo <message>",
-                "description": "Repeat back the message.",
-                "handler": self._cmd_echo
-            },
-            "history": {
-                "aliases": ["history", "log", "logs", "show history", "show log", "/history"],
-                "usage": "history OR history <number>",
-                "description": "Show past commands and assistant responses (optionally last N).",
-                "handler": self._cmd_history
-            },
-            "clear_history": {
-                "aliases": ["clear history", "clear log", "clear logs", "/clear_history"],
-                "usage": "clear history",
-                "description": "Clear the saved history.",
-                "handler": self._cmd_clear_history
-            },
-            "search_history": {
-                "aliases": ["search history", "find", "find history", "search log", "search logs", "/search"],
-                "usage": "search history <keywords>",
-                "description": "Search the command logs by keywords.",
-                "handler": self._cmd_search_history
-            }
-        }
-        validated_actions = {}
-        for key, action in actions.items():
-            if self._validate_action(action):
-                validated_actions[key] = action
-        return validated_actions
-
-    def _cmd_help(self, _args):
-        if not isinstance(self._actions, dict):
-            return "Help information unavailable."
-        lines = []
-        lines.append("Available actions:")
-        lines.append("")
-        keys = list(self._actions.keys())
-        keys.sort()
-
-        for name in keys:
-            info = self._actions.get(name)
-            if not isinstance(info, dict):
-                continue
-            aliases = info.get("aliases", [])
-            usage = info.get("usage", "")
-            description = info.get("description", "")
-            if isinstance(aliases, (list, tuple)):
-                alias_str = ", ".join(str(a) for a in aliases)
-            else:
-                alias_str = ""
-            lines.append("- " + str(usage))
-            lines.append("  " + str(description))
-            lines.append("  Aliases: " + alias_str)
-            lines.append("")
-
-        lines.append("Examples:")
-        lines.append("  history 10")
-        lines.append("  search history status")
-        lines.append("  search history echo hello")
-        return "\n".join(lines).rstrip()
-
-    def _cmd_exit(self, _args):
-        return "Exiting. Bye!"
-
-    def _cmd_status(self, _args):
-        return "OK"
-
-    def _cmd_echo(self, args):
-        msg = (args or "").strip() if isinstance(args, str) else ""
-        if not msg:
-            return "Usage: echo <message>"
-        return msg
-
-    def _cmd_history(self, args):
-        limit = None
-        a = (args or "").strip() if isinstance(args, str) else ""
-        if a:
-            if self._is_int(a):
-                limit = int(a)
-            else:
-                return "Usage: history OR history <number>"
-
-        if not isinstance(self._history, list) or not self._history:
-            return "No history yet."
-
-        items = self._history
-        if limit is not None:
-            if not isinstance(limit, int) or limit <= 0:
-                return "Please enter a positive number. Example: history 10"
-            if limit > len(self._history):
-                limit = len(self._history)
-            items = self._history[-limit:]
-
-        lines = []
-        lines.append("History:")
-        start_index = len(self._history) - len(items) + 1
-        i = start_index
-        for entry in items:
-            if not self._validate_history_entry(entry):
-                continue
-            lines.append(str(i) + ". You: " + str(entry.get("input", "")))
-            lines.append("   Assistant: " + str(entry.get("output", "")))
-            i += 1
-        return "\n".join(lines)
-
-    def _cmd_clear_history(self, _args):
-        if isinstance(self._history, list):
-            self._history = []
-        return "History cleared."
-
-    def _cmd_search_history(self, args):
-        query = self._normalize(args)
-        if not query:
-            return "Usage: search history <keywords>"
-
-        if not isinstance(self._history, list) or not self._history:
-            return "No history yet."
-
-        keywords = self._split_keywords(query)
-        if not keywords:
-            return "Usage: search history <keywords>"
-
-        matches = []
-        for idx, entry in enumerate(self._history, 1):
-            if not self._validate_history_entry(entry):
-                continue
-            hay = self._normalize(str(entry.get("input", "")) + " " + str(entry.get("output", "")))
-            if self._all_keywords_present(hay, keywords):
-                matches.append((idx, entry))
-
-        if not matches:
-            keyword_str = " ".join(str(k) for k in keywords)
-            return "No matches found for: " + keyword_str
-
-        lines = []
-        lines.append("Matches (" + str(len(matches)) + "):")
-        for idx, entry in matches:
-            if not self._validate_history_entry(entry):
-                continue
-            lines.append(str(idx) + ". You: " + str(entry.get("input", "")))
-            lines.append("   Assistant: " + str(entry.get("output", "")))
-        return "\n".join(lines)
-
-    def _normalize(self, text):
-        if not isinstance(text, str):
-            text = str(text) if text is not None else ""
-        text = text.strip().lower()
+    def _clean(self, text):
+        text = (text or "").strip()
         while "  " in text:
             text = text.replace("  ", " ")
         return text
 
-    def _split_command(self, text):
-        t = (text or "").strip() if isinstance(text, str) else ""
-        while "  " in t:
-            t = t.replace("  ", " ")
-        if not t:
-            return "", ""
-
-        if t.startswith("/"):
-            t = t[1:].lstrip()
-
-        lowered = t.lower()
-
-        if not isinstance(self._actions, dict):
-            parts = t.split(" ", 1)
-            cmd = parts[0].lower().strip()
-            args = parts[1] if len(parts) > 1 else ""
-            return cmd, args
-
-        alias_map = {}
-        for action_name, info in self._actions.items():
-            if not isinstance(info, dict):
-                continue
-            alias_map[action_name] = action_name
-            aliases = info.get("aliases", [])
-            if isinstance(aliases, (list, tuple)):
-                for a in aliases:
-                    if isinstance(a, str):
-                        alias_map[a.lower().lstrip("/")] = action_name
-
-        aliases = list(alias_map.keys())
-        aliases.sort(key=lambda x: len(str(x)), reverse=True)
-
-        for a in aliases:
-            a_str = str(a)
-            if lowered == a_str:
-                return a_str, ""
-            if lowered.startswith(a_str + " "):
-                return a_str, t[len(a_str):].lstrip()
-
-        parts = t.split(" ", 1)
-        cmd = parts[0].lower().strip()
-        args = parts[1] if len(parts) > 1 else ""
-        return cmd, args
-
-    def _find_action_by_alias(self, cmd_text):
-        if not isinstance(cmd_text, str):
-            return None
-        c = cmd_text.strip().lower().lstrip("/")
-        if not c:
-            return None
-
-        if not isinstance(self._actions, dict):
-            return None
-
-        if c in self._actions:
-            return c
-
-        for name, info in self._actions.items():
-            if not isinstance(info, dict):
-                continue
-            aliases = info.get("aliases", [])
-            if not isinstance(aliases, (list, tuple)):
-                continue
-            for a in aliases:
-                if isinstance(a, str) and c == a.lower().lstrip("/"):
-                    return name
-        return None
-
-    def _is_int(self, s):
-        if not isinstance(s, str):
-            s = str(s) if s is not None else ""
-        s = s.strip()
-        if not s:
+    def _is_number(self, text):
+        text = (text or "").strip()
+        if not text:
             return False
-        if s[0] in "+-":
-            s = s[1:]
-        if not s:
-            return False
-        for ch in s:
+        for ch in text:
             if ch < "0" or ch > "9":
                 return False
         return True
 
-    def _split_keywords(self, query):
-        if not isinstance(query, str):
-            query = str(query) if query is not None else ""
-        parts = query.split(" ")
+    def _to_lower(self, text):
+        return (text or "").strip().lower()
+
+    def _split_tags(self, tags_text):
+        raw = (tags_text or "").strip()
+        if not raw:
+            return []
+        parts = raw.split(",")
         out = []
         for p in parts:
-            p = p.strip()
-            if p:
-                out.append(p)
-        return out
+            t = self._to_lower(p)
+            t = self._clean(t)
+            if t:
+                out.append(t)
+        unique = []
+        for t in out:
+            if t not in unique:
+                unique.append(t)
+        return unique
 
-    def _all_keywords_present(self, text, keywords):
-        if not isinstance(text, str):
-            text = str(text) if text is not None else ""
-        if not isinstance(keywords, (list, tuple)):
-            return False
+    def _validate_note(self, title, content):
+        if not title or not title.strip():
+            return False, "Title cannot be empty."
+        if not content or not content.strip():
+            return False, "Content cannot be empty."
+        return True, None
+
+    def _matches_keywords(self, note, keywords):
+        hay = self._to_lower(note["title"] + " " + note["content"])
         for k in keywords:
-            if not isinstance(k, str):
-                continue
-            if k not in text:
+            if k not in hay:
                 return False
         return True
 
-    def _log_interaction(self, raw_input, output_text):
-        if not isinstance(self._history, list):
-            self._history = []
-        entry = {
-            "input": str(raw_input).strip() if raw_input is not None else "",
-            "output": str(output_text).strip() if output_text is not None else ""
+    def _find_note(self, note_id):
+        for n in self._notes:
+            if n["id"] == note_id:
+                return n
+        return None
+
+    def handle(self, user_input):
+        raw = self._clean(user_input)
+        low = raw.lower()
+
+        if not raw:
+            return "Type 'help' to see commands."
+
+        if low in ("help", "h", "?"):
+            return (
+                "Commands:\n"
+                "- new <title> | <content> | <tag1,tag2,...>\n"
+                "- list\n"
+                "- get <id>\n"
+                "- delete <id>\n"
+                "- search keyword <words>\n"
+                "- search tag <tagname>\n"
+                "- edit <id> | <new title> | <new content>\n"
+                "Examples:\n"
+                "  new shopping | buy milk and bread\n"
+                "  search keyword milk\n"
+                "  edit 1 | updated title | updated content"
+            )
+
+        if low.startswith("new "):
+            return self._new_note(raw[4:])
+
+        if low == "list":
+            return self._list_notes()
+
+        if low.startswith("get "):
+            return self._get_note(raw[4:])
+
+        if low.startswith("delete "):
+            return self._delete_note(raw[7:])
+
+        if low.startswith("search keyword "):
+            return self._search_keyword(raw[len("search keyword "):])
+
+        if low.startswith("search tag "):
+            return self._search_tag(raw[len("search tag "):])
+
+        if low.startswith("edit "):
+            return self._edit_note(raw[5:])
+
+        return "Unknown command. Type 'help' to see commands."
+
+    def _new_note(self, rest):
+        rest = rest.strip()
+        parts = rest.split("|")
+        if len(parts) < 2:
+            return "Usage: new <title> | <content> | <tag1,tag2,...>"
+
+        title = parts[0].strip()
+        content = parts[1].strip()
+        tags_text = ""
+        if len(parts) >= 3:
+            tags_text = parts[2].strip()
+
+        valid, error = self._validate_note(title, content)
+        if not valid:
+            return error
+
+        tags = self._split_tags(tags_text)
+
+        note = {
+            "id": self._next_id,
+            "title": title,
+            "content": content,
+            "tags": tags
         }
-        if self._validate_history_entry(entry):
-            self._history.append(entry)
+        self._notes.append(note)
+        self._next_id += 1
+        self._save_notes()
 
-    def handle(self, user_text):
-        raw = user_text if user_text is not None else ""
-        cmd_text, args = self._split_command(raw)
+        return "Note created. ID=" + str(note["id"])
 
-        if not cmd_text:
-            out = "No command entered. Type 'help' to see available actions."
-            self._log_interaction(raw, out)
-            return out
+    def _list_notes(self):
+        if not self._notes:
+            return "No notes found."
+        lines = ["Notes:"]
+        for n in self._notes:
+            tags = n.get("tags", [])
+            tag_part = "tags: " + (", ".join(tags) if tags else "none")
+            lines.append("ID=" + str(n["id"]) + " | " + n["title"] + " | " + tag_part)
+        return "\n".join(lines)
 
-        action_name = self._find_action_by_alias(cmd_text)
-        if action_name is None:
-            out = "Unknown command: '" + cmd_text + "'. Type 'help' to see all available actions."
-            self._log_interaction(raw, out)
-            return out
+    def _get_note(self, id_text):
+        id_text = id_text.strip()
+        if not self._is_number(id_text):
+            return "Usage: get <id>"
 
-        if not isinstance(self._actions, dict):
-            out = "Error processing command."
-            self._log_interaction(raw, out)
-            return out
+        note_id = int(id_text)
+        for n in self._notes:
+            if n["id"] == note_id:
+                tags = n.get("tags", [])
+                tags_str = ", ".join(tags) if tags else "none"
+                return (
+                    "ID=" + str(n["id"]) + "\n"
+                    "Title: " + n["title"] + "\n"
+                    "Tags: " + tags_str + "\n"
+                    "Content: " + n["content"]
+                )
+        return "Note not found: " + str(note_id)
 
-        handler_info = self._actions.get(action_name)
-        if not isinstance(handler_info, dict):
-            out = "Error processing command."
-            self._log_interaction(raw, out)
-            return out
+    def _delete_note(self, id_text):
+        id_text = id_text.strip()
+        if not self._is_number(id_text):
+            return "Usage: delete <id>"
 
-        handler = handler_info.get("handler")
-        if not callable(handler):
-            out = "Error processing command."
-            self._log_interaction(raw, out)
-            return out
+        note_id = int(id_text)
+        for i in range(len(self._notes)):
+            if self._notes[i]["id"] == note_id:
+                removed_title = self._notes[i]["title"]
+                del self._notes[i]
+                self._save_notes()
+                return "Deleted note ID=" + str(note_id) + " (" + removed_title + ")"
+        return "No note found with ID=" + str(note_id)
 
-        out = handler(args)
-        self._log_interaction(raw, out)
-        return out
+    def _search_keyword(self, words):
+        text = self._clean(words)
+        if not text:
+            return "Usage: search keyword <words>"
 
-    def should_exit(self, user_text):
-        cmd_text, _ = self._split_command(user_text)
-        action_name = self._find_action_by_alias(cmd_text)
-        return action_name == "exit"
+        keywords = self._clean(self._to_lower(text)).split(" ")
+        filtered = []
+        for k in keywords:
+            k = k.strip()
+            if k:
+                filtered.append(k)
+
+        if not filtered:
+            return "Usage: search keyword <words>"
+
+        matches = []
+        for n in self._notes:
+            if self._matches_keywords(n, filtered):
+                matches.append(n)
+
+        if not matches:
+            return "No notes found for keywords: " + " ".join(filtered)
+
+        lines = ["Matches (" + str(len(matches)) + "):"]
+        for n in matches:
+            lines.append("ID=" + str(n["id"]) + " | " + n["title"])
+        return "\n".join(lines)
+
+    def _search_tag(self, tag_text):
+        tag = self._clean(self._to_lower(tag_text))
+        if not tag:
+            return "Usage: search tag <tagname>"
+
+        matches = []
+        for n in self._notes:
+            tags = n.get("tags", [])
+            if tag in tags:
+                matches.append(n)
+
+        if not matches:
+            return "No notes found for tag: " + tag
+
+        lines = ["Matches (" + str(len(matches)) + ") for tag '" + tag + "':"]
+        for n in matches:
+            lines.append("ID=" + str(n["id"]) + " | " + n["title"])
+        return "\n".join(lines)
+
+    def _edit_note(self, rest):
+        parts = rest.split("|")
+        if len(parts) < 3:
+            return "Usage: edit <id> | <new title> | <new content>"
+
+        id_text = parts[0].strip()
+        new_title = parts[1].strip()
+        new_content = parts[2].strip()
+
+        if not self._is_number(id_text):
+            return "Usage: edit <id> | <new title> | <new content>"
+
+        note_id = int(id_text)
+        n = self._find_note(note_id)
+        if not n:
+            return "Note not found: " + str(note_id)
+
+        valid, error = self._validate_note(new_title, new_content)
+        if not valid:
+            return error
+
+        n["title"] = new_title
+        n["content"] = new_content
+        self._save_notes()
+
+        return "Note updated. ID=" + str(note_id)
 
 
 if __name__ == "__main__":
-    app = Assistant()
-    print("Assistant ready. Type 'help' to see available actions.")
+    app = NoteAssistant()
+    print("Note Assistant ready. Type 'help' for commands. Type 'exit' to quit.")
     while True:
         user = input("> ")
-        response = app.handle(user)
-        print(response)
-        if app.should_exit(user):
+        if user.strip().lower() in ("exit", "quit"):
+            print("Bye!")
             break
+        print(app.handle(user))
 
