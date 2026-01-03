@@ -1,3 +1,7 @@
+import json
+import os
+
+
 class InfoSnippetAssistant:
     def __init__(self):
         self._snippets = {
@@ -265,9 +269,237 @@ class KeywordSnippetAssistant:
         return "Snippet not found: " + str(sid)
 
 
+class PersistentSnippets:
+    def __init__(self, file_path="snippets.json"):
+        self._file_path = file_path
+        self._info = InfoSnippetAssistant()
+        self._keyword = KeywordSnippetAssistant()
+        self._snippets = []
+        self._next_id = 1
+        loaded = self._load_file()
+
+        if not loaded:
+            self._seed_defaults()
+            self._save_file()
+
+    def _clean(self, s):
+        s = (s or "").strip()
+        while "  " in s:
+            s = s.replace("  ", " ")
+        return s
+
+    def _is_number(self, s):
+        s = (s or "").strip()
+        if not s:
+            return False
+        for ch in s:
+            if ch < "0" or ch > "9":
+                return False
+        return True
+
+    def _split_pipe(self, text):
+        parts = text.split("|")
+        out = []
+        for p in parts:
+            out.append(p.strip())
+        return out
+
+    def _lower(self, s):
+        return (s or "").strip().lower()
+
+    def _find_snip(self, sid):
+        for sn in self._snippets:
+            if sn["id"] == sid:
+                return sn
+        return None
+
+    def _load_file(self):
+        if not os.path.exists(self._file_path):
+            return False
+
+        try:
+            with open(self._file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and "snippets" in data:
+                    snippets_list = data["snippets"]
+                    if isinstance(snippets_list, list):
+                        self._snippets = []
+                        self._next_id = 1
+                        for item in snippets_list:
+                            if isinstance(item, dict) and "id" in item and "title" in item and "text" in item:
+                                sid = item["id"]
+                                if isinstance(sid, int) and sid > 0:
+                                    self._snippets.append({
+                                        "id": sid,
+                                        "title": str(item["title"]),
+                                        "text": str(item["text"])
+                                    })
+                                    if sid >= self._next_id:
+                                        self._next_id = sid + 1
+                        return len(self._snippets) > 0
+        except Exception:
+            pass
+        return False
+
+    def _save_file(self):
+        try:
+            data = {
+                "snippets": self._snippets
+            }
+            with open(self._file_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def _seed_defaults(self):
+        defaults = [
+            ("privacy", "Data is stored locally and is not shared."),
+            ("usage", "Type help to see commands. Use list, get, add, delete, search."),
+            ("notes", "Notes store text information for later review."),
+            ("reminders", "Reminders help remember tasks at the right time."),
+            ("calculator", "Calculator solves small arithmetic problems quickly."),
+        ]
+        for title, text in defaults:
+            self._snippets.append({"id": self._next_id, "title": title, "text": text})
+            self._next_id += 1
+
+    def handle(self, user_input):
+        raw = self._clean(user_input)
+        low = self._lower(raw)
+
+        if not raw:
+            return "Type 'help' to see commands."
+
+        if low in ("help", "h", "?"):
+            return (
+                "Commands:\n"
+                "- info <topic>\n"
+                "- topics\n"
+                "- ask <keywords>\n"
+                "- show <id>\n"
+                "- all\n"
+                "- add <title> | <text>\n"
+                "- list\n"
+                "- get <id>\n"
+                "- delete <id>\n"
+                "- search <keyword>\n"
+                "Notes:\n"
+                "- Snippets auto-load on startup.\n"
+                "- Snippets auto-save after add/delete."
+            )
+
+        if low == "topics":
+            return self._info.handle(user_input)
+
+        if low.startswith("info "):
+            return self._info.handle(user_input)
+
+        if low == "all":
+            return self._keyword.handle(user_input)
+
+        if low.startswith("ask "):
+            return self._keyword.handle(user_input)
+
+        if low.startswith("show "):
+            return self._keyword.handle(user_input)
+
+        if low.startswith("add "):
+            return self._add(raw[4:])
+
+        if low == "list":
+            return self._list()
+
+        if low.startswith("get "):
+            return self._get(raw[4:])
+
+        if low.startswith("delete "):
+            return self._delete(raw[7:])
+
+        if low.startswith("search "):
+            return self._search(raw[7:])
+
+        return "Unknown command. Type 'help' to see commands."
+
+    def _add(self, rest):
+        parts = self._split_pipe(rest)
+        if len(parts) < 2:
+            return "Usage: add <title> | <text>"
+
+        title = parts[0]
+        text = parts[1]
+
+        if not title:
+            return "Title cannot be empty."
+        if not text:
+            return "Text cannot be empty."
+
+        sn = {"id": self._next_id, "title": title, "text": text}
+        self._next_id += 1
+        self._snippets.append(sn)
+        self._save_file()
+
+        return "Snippet saved. ID=" + str(sn["id"])
+
+    def _list(self):
+        if not self._snippets:
+            return "No snippets available."
+        lines = ["Snippets:"]
+        for sn in self._snippets:
+            lines.append("ID=" + str(sn["id"]) + " | " + sn["title"])
+        return "\n".join(lines)
+
+    def _get(self, id_text):
+        id_text = id_text.strip()
+        if not self._is_number(id_text):
+            return "Usage: get <id>"
+
+        sid = int(id_text)
+        sn = self._find_snip(sid)
+        if not sn:
+            return "Snippet not found: " + str(sid)
+
+        return (
+            "ID: " + str(sn["id"]) + "\n"
+            "Title: " + sn["title"] + "\n"
+            "Text: " + sn["text"]
+        )
+
+    def _delete(self, id_text):
+        id_text = id_text.strip()
+        if not self._is_number(id_text):
+            return "Usage: delete <id>"
+
+        sid = int(id_text)
+        for i in range(len(self._snippets)):
+            if self._snippets[i]["id"] == sid:
+                del self._snippets[i]
+                self._save_file()
+                return "Snippet deleted. ID=" + str(sid)
+
+        return "Snippet not found: " + str(sid)
+
+    def _search(self, keyword_text):
+        key = self._lower(keyword_text)
+        if not key:
+            return "Usage: search <keyword>"
+
+        matches = []
+        for sn in self._snippets:
+            if key in self._lower(sn["title"]) or key in self._lower(sn["text"]):
+                matches.append(sn)
+
+        if not matches:
+            return "No snippets found for keyword: " + key
+
+        lines = ["Matches:"]
+        for sn in matches:
+            lines.append("ID=" + str(sn["id"]) + " | " + sn["title"])
+        return "\n".join(lines)
+
+
 if __name__ == "__main__":
-    app = KeywordSnippetAssistant()
-    print("Keyword Snippet Assistant ready. Type 'help' for commands. Type 'exit' to quit.")
+    app = PersistentSnippets(file_path="snippets.json")
+    print("Persistent Snippets Assistant ready. Type 'help' for commands. Type 'exit' to quit.")
     while True:
         user = input("> ")
         if user.strip().lower() in ("exit", "quit"):
