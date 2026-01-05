@@ -29,12 +29,13 @@ To generate a detailed coverage report (including HTML):
 
 3. **View report:** Open `htmlcov/index.html` in your web browser.
 
-## One-Line Command (Run Tests & Generate Coverage)
+## One-Line Command (Run Tests & Generate Coverage - Windows PowerShell Compatible)
 ```bash
-python3 -m coverage run --branch -m unittest discover -s 259047772/test -p "test_*.py" && python3 -m coverage html
+python3 -m coverage run --branch -m unittest discover -s 259047772/test -p "test_*.py" ; python3 -m coverage report -m ; python3 -m coverage html
 ```
 
 ## Expected Results
 - **Total Tests:** 59 (all passing)
 - **Coverage:** Target 85%+ ✓
+
 
