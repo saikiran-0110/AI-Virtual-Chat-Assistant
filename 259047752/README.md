@@ -10,7 +10,7 @@
 
 ## Run All Tests
 ```bash
-cd "/Users/mohammedmustaq/Downloads/smqa3 1/smqa 3 final"
+
 python3 -m unittest 259047752.test.blackbox.specification_based.test_profile_system 259047752.test.blackbox.specification_based.test_reminder_system 259047752.test.whitebox.statement_coverage.test_profile_statements 259047752.test.whitebox.statement_coverage.test_reminder_statements 259047752.test.whitebox.branch_coverage.test_reminder_branches 259047752.test.whitebox.symbolic_execution.test_reminder_logic_symbolic 259047752.test.whitebox.concolic_testing.test_reminder_branches_concolic -v
 ```
 
@@ -18,7 +18,7 @@ python3 -m unittest 259047752.test.blackbox.specification_based.test_profile_sys
 
 ### Step 1: Run tests with coverage
 ```bash
-cd "/Users/mohammedmustaq/Downloads/smqa3 1/smqa 3 final"
+
 python3 -m coverage run --branch -m unittest 259047752.test.blackbox.specification_based.test_profile_system 259047752.test.blackbox.specification_based.test_reminder_system 259047752.test.whitebox.statement_coverage.test_profile_statements 259047752.test.whitebox.statement_coverage.test_reminder_statements 259047752.test.whitebox.branch_coverage.test_reminder_branches 259047752.test.whitebox.symbolic_execution.test_reminder_logic_symbolic 259047752.test.whitebox.concolic_testing.test_reminder_branches_concolic
 ```
 
@@ -35,6 +35,6 @@ open htmlcov/index.html
 
 ## One-Line Coverage Command
 ```bash
-cd "/Users/mohammedmustaq/Downloads/smqa3 1/smqa 3 final" && python3 -m coverage run --branch -m unittest 259047752.test.blackbox.specification_based.test_profile_system 259047752.test.blackbox.specification_based.test_reminder_system 259047752.test.whitebox.statement_coverage.test_profile_statements 259047752.test.whitebox.statement_coverage.test_reminder_statements 259047752.test.whitebox.branch_coverage.test_reminder_branches 259047752.test.whitebox.symbolic_execution.test_reminder_logic_symbolic 259047752.test.whitebox.concolic_testing.test_reminder_branches_concolic && python3 -m coverage report -m && python3 -m coverage html
+python3 -m coverage run --branch -m unittest 259047752.test.blackbox.specification_based.test_profile_system 259047752.test.blackbox.specification_based.test_reminder_system 259047752.test.whitebox.statement_coverage.test_profile_statements 259047752.test.whitebox.statement_coverage.test_reminder_statements 259047752.test.whitebox.branch_coverage.test_reminder_branches 259047752.test.whitebox.symbolic_execution.test_reminder_logic_symbolic 259047752.test.whitebox.concolic_testing.test_reminder_branches_concolic && python3 -m coverage report -m && python3 -m coverage html
 ```
 

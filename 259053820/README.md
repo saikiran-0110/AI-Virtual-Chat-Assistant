@@ -8,7 +8,7 @@
 
 ## Run All Tests
 ```bash
-cd "/Users/mohammedmustaq/Downloads/smqa3 1/smqa 3 final"
+
 python3 -m unittest 259053820.test.blackbox.specification_based.test_command_parsing 259053820.test.blackbox.specification_based.test_help_menu 259053820.test.blackbox.specification_based.test_error_handling 259053820.test.whitebox.statement_coverage.test_command_parsing_statements 259053820.test.whitebox.branch_coverage.test_command_parsing_branches 259053820.test.whitebox.symbolic_execution.test_command_parsing_symbolic 259053820.test.whitebox.concolic_testing.test_command_parsing_concolic -v
 ```
 
@@ -16,7 +16,7 @@ python3 -m unittest 259053820.test.blackbox.specification_based.test_command_par
 
 ### Step 1: Run tests with coverage
 ```bash
-cd "/Users/mohammedmustaq/Downloads/smqa3 1/smqa 3 final"
+
 python3 -m coverage run --branch -m unittest 259053820.test.blackbox.specification_based.test_command_parsing 259053820.test.blackbox.specification_based.test_help_menu 259053820.test.blackbox.specification_based.test_error_handling 259053820.test.whitebox.statement_coverage.test_command_parsing_statements 259053820.test.whitebox.branch_coverage.test_command_parsing_branches 259053820.test.whitebox.symbolic_execution.test_command_parsing_symbolic 259053820.test.whitebox.concolic_testing.test_command_parsing_concolic
 ```
 
@@ -33,7 +33,7 @@ open htmlcov/index.html
 
 ## One-Line Coverage Command
 ```bash
-cd "/Users/mohammedmustaq/Downloads/smqa3 1/smqa 3 final" && python3 -m coverage run --branch -m unittest 259053820.test.blackbox.specification_based.test_command_parsing 259053820.test.blackbox.specification_based.test_help_menu 259053820.test.blackbox.specification_based.test_error_handling 259053820.test.whitebox.statement_coverage.test_command_parsing_statements 259053820.test.whitebox.branch_coverage.test_command_parsing_branches 259053820.test.whitebox.symbolic_execution.test_command_parsing_symbolic 259053820.test.whitebox.concolic_testing.test_command_parsing_concolic && python3 -m coverage report -m && python3 -m coverage html
+python3 -m coverage run --branch -m unittest 259053820.test.blackbox.specification_based.test_command_parsing 259053820.test.blackbox.specification_based.test_help_menu 259053820.test.blackbox.specification_based.test_error_handling 259053820.test.whitebox.statement_coverage.test_command_parsing_statements 259053820.test.whitebox.branch_coverage.test_command_parsing_branches 259053820.test.whitebox.symbolic_execution.test_command_parsing_symbolic 259053820.test.whitebox.concolic_testing.test_command_parsing_concolic && python3 -m coverage report -m && python3 -m coverage html
 ```
 
 ## Expected Results
